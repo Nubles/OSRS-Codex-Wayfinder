@@ -1,0 +1,76 @@
+package com.codex.wayfinder.core;
+
+/** One step of a route: a walk between two tiles, or a trip. */
+public final class Step
+{
+	public enum Type
+	{
+		WALK,
+		TRIP
+	}
+
+	private final Type type;
+	private final int from;
+	private final int to;
+	private final Transport transport;
+	private final int seconds;
+	private final int tiles;
+	private final boolean learned;
+	private final boolean fromBank;
+
+	Step(Type type, int from, int to, Transport transport, int seconds, int tiles, boolean learned, boolean fromBank)
+	{
+		this.type = type;
+		this.from = from;
+		this.to = to;
+		this.transport = transport;
+		this.seconds = seconds;
+		this.tiles = tiles;
+		this.learned = learned;
+		this.fromBank = fromBank;
+	}
+
+	public Type getType()
+	{
+		return type;
+	}
+
+	public int getFrom()
+	{
+		return from;
+	}
+
+	public int getTo()
+	{
+		return to;
+	}
+
+	/** The trip, for a trip step; null for a walk. */
+	public Transport getTransport()
+	{
+		return transport;
+	}
+
+	public int getSeconds()
+	{
+		return seconds;
+	}
+
+	/** Tiles walked, for a walk step. */
+	public int getTiles()
+	{
+		return tiles;
+	}
+
+	/** Timed from this player's own trips rather than estimated. */
+	public boolean isLearned()
+	{
+		return learned;
+	}
+
+	/** Needs an item the player owns but is not carrying. */
+	public boolean isFromBank()
+	{
+		return fromBank;
+	}
+}
