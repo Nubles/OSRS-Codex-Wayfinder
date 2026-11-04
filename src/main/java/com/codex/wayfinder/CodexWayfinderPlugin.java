@@ -43,7 +43,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.inject.Inject;
 import javax.swing.SwingUtilities;
-import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.EnumComposition;
@@ -93,7 +92,6 @@ import net.runelite.client.util.Text;
  * never clicks, never changes menus and sends nothing off the computer. Other Codex apps read
  * what it shares through the RuneLite profile, or ask it for a route with a plugin message.
  */
-@Slf4j
 @PluginDescriptor(
 	name = "Codex Wayfinder",
 	description = "Your own travel atlas: the quickest way anywhere with the teleports, rings, trees and ships you have unlocked, timed by your own trips",
@@ -224,13 +222,10 @@ public class CodexWayfinderPlugin extends Plugin
 		overlayManager.add(mark);
 		worker.execute(() ->
 		{
-			long t = System.currentTimeMillis();
 			Atlas a = Atlas.load();
 			atlas = a;
 			router = new Router(a);
 			advisor = new Advisor(router);
-			log.debug("Wayfinder atlas: {} trips, {} places in {} ms", a.getTransports().size(), a.getPlaces().size(),
-				System.currentTimeMillis() - t);
 			clientThread.invokeLater(() ->
 			{
 				accountDirty = true;
@@ -997,7 +992,7 @@ public class CodexWayfinderPlugin extends Plugin
 			}
 			catch (RuntimeException e)
 			{
-				log.warn("Wayfinder could not read its saved memory; starting fresh", e);
+				// A damaged save: start fresh rather than fail.
 			}
 		}
 		memory = (m == null ? new Memory() : m).mend();
