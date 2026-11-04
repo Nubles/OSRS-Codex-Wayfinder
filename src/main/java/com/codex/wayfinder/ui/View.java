@@ -1,5 +1,6 @@
 package com.codex.wayfinder.ui;
 
+import com.codex.wayfinder.arena.ArenaHunt;
 import com.codex.wayfinder.core.Advisor;
 import com.codex.wayfinder.core.Items;
 import com.codex.wayfinder.core.Overview;
@@ -34,10 +35,12 @@ public final class View
 	/** Every named place, for putting landings into words. */
 	public final List<Place> places;
 	public final Items items;
+	/** The Mage Arena II followers, or null while no hunt is on. */
+	public final List<ArenaHunt.Line> arena;
 
 	public View(boolean loggedIn, boolean ready, Overview overview, Place destination, Route route, Route bankRoute,
 		boolean planning, String query, List<Place> results, List<Place> recent, List<Advisor.Unlock> unlocks,
-		List<Trip> trips, Paces paces, String note, List<Place> places, Items items)
+		List<Trip> trips, Paces paces, String note, List<Place> places, Items items, List<ArenaHunt.Line> arena)
 	{
 		this.loggedIn = loggedIn;
 		this.ready = ready;
@@ -55,10 +58,11 @@ public final class View
 		this.note = note;
 		this.places = places == null ? Collections.emptyList() : places;
 		this.items = items == null ? Items.NONE : items;
+		this.arena = arena;
 	}
 
 	public static View empty()
 	{
-		return new View(false, false, null, null, null, null, false, "", null, null, Collections.emptyList(), null, null, null, null, null);
+		return new View(false, false, null, null, null, null, false, "", null, null, Collections.emptyList(), null, null, null, null, null, null);
 	}
 }

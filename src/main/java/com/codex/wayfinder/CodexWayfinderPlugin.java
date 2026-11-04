@@ -1,5 +1,9 @@
 package com.codex.wayfinder;
 
+import com.codex.wayfinder.arena.ArenaBoss;
+import com.codex.wayfinder.arena.ArenaHunt;
+import com.codex.wayfinder.arena.ArenaPins;
+import com.codex.wayfinder.arena.ArenaWords;
 import com.codex.wayfinder.core.Account;
 import com.codex.wayfinder.core.Advisor;
 import com.codex.wayfinder.core.Atlas;
@@ -57,12 +61,14 @@ import net.runelite.api.GameState;
 import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.MenuAction;
+import net.runelite.api.NPC;
 import net.runelite.api.Player;
 import net.runelite.api.Point;
 import net.runelite.api.Quest;
 import net.runelite.api.QuestState;
 import net.runelite.api.Skill;
 import net.runelite.api.coords.WorldPoint;
+import net.runelite.api.events.ActorDeath;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
@@ -121,6 +127,10 @@ public class CodexWayfinderPlugin extends Plugin
 	private static final int ARRIVED = 3;
 	private static final int RESULTS = 8;
 	private static final int UNLOCKS = 6;
+	/** Game ticks between refreshes of the followers' "seen" times while nothing else changes. */
+	private static final int ARENA_TICKS = 100;
+	/** Walking this many tiles from where the followers' routes were planned plans them again. */
+	private static final int ARENA_REPLAN_TILES = 24;
 	private static final int[] POUCH_TYPES = {VarbitID.RUNE_POUCH_TYPE_1, VarbitID.RUNE_POUCH_TYPE_2, VarbitID.RUNE_POUCH_TYPE_3,
 		VarbitID.RUNE_POUCH_TYPE_4, VarbitID.RUNE_POUCH_TYPE_5, VarbitID.RUNE_POUCH_TYPE_6};
 	private static final int[] POUCH_AMOUNTS = {VarbitID.RUNE_POUCH_QUANTITY_1, VarbitID.RUNE_POUCH_QUANTITY_2,
@@ -177,6 +187,18 @@ public class CodexWayfinderPlugin extends Plugin
 	private WorldMapPoint pin;
 	private Place pinned;
 	private final Tracker tracker = new Tracker();
+	private ArenaPins arenaPins;
+	/** Mage Arena II is in progress on this account. */
+	private volatile boolean arenaOn;
+	/** The followers as shown, with their routes; null while no hunt is shown. */
+	private volatile List<ArenaHunt.Line> arenaLines;
+	private boolean arenaDirty = true;
+	private int arenaPlannedFrom = Pt.NONE;
+	/** The last value of the follower rotation timer, or -1 before the first read. */
+	private int arenaTimer = -1;
+	private final AtomicInteger arenaGeneration = new AtomicInteger();
+	/** Scene indexes of followers seen fighting this player, so only their deaths count as kills. */
+	private final Set<Integer> arenaFought = new HashSet<>();
 
 	private volatile Atlas atlas;
 	private volatile Router router;
@@ -245,6 +267,7 @@ public class CodexWayfinderPlugin extends Plugin
 		groundTrail = new GroundTrail(client);
 		minimapTrail = new MinimapTrail(client);
 		mapTrail = new MapTrail(client, worldMapOverlay);
+		arenaPins = new ArenaPins(worldMapPointManager);
 		overlayManager.add(plaque);
 		overlayManager.add(mark);
 		overlayManager.add(groundTrail);
@@ -285,6 +308,10 @@ public class CodexWayfinderPlugin extends Plugin
 		overlayManager.remove(minimapTrail);
 		overlayManager.remove(mapTrail);
 		unpin();
+		arenaPins.clear();
+		arenaLines = null;
+		arenaOn = false;
+		arenaTimer = -1;
 		trail = null;
 		trailRoute = null;
 		worker.shutdownNow();
@@ -318,6 +345,9 @@ public class CodexWayfinderPlugin extends Plugin
 				saveMemory();
 				loggedIn = false;
 				here = Pt.NONE;
+				arenaOn = false;
+				arenaTimer = -1;
+				showArena();
 				push();
 			}
 		}
@@ -356,6 +386,17 @@ public class CodexWayfinderPlugin extends Plugin
 		else if (e.getContainerId() == InventoryID.INV || e.getContainerId() == InventoryID.WORN)
 		{
 			accountDirty = true;
+			if (e.getContainerId() == InventoryID.INV && arenaActive())
+			{
+				for (Item i : e.getItemContainer().getItems())
+				{
+					ArenaBoss b = ArenaBoss.ofDrop(i.getId());
+					if (b != null)
+					{
+						arenaProof(b, ArenaHunt.Proof.CARRIED);
+					}
+				}
+			}
 		}
 	}
 
@@ -378,6 +419,30 @@ public class CodexWayfinderPlugin extends Plugin
 			o.addProperty("text", msg);
 			o.addProperty("at", Pt.toString(here));
 			notes.note("chat", o);
+		}
+	}
+
+	@Subscribe
+	public void onActorDeath(ActorDeath e)
+	{
+		if (!arenaActive())
+		{
+			return;
+		}
+		if (e.getActor() instanceof NPC)
+		{
+			NPC npc = (NPC) e.getActor();
+			ArenaBoss b = ArenaBoss.ofNpc(npc.getId());
+			if (b != null && arenaFought.remove(npc.getIndex()))
+			{
+				arenaProof(b, ArenaHunt.Proof.KILLED);
+			}
+		}
+		else if (e.getActor() == client.getLocalPlayer() && memory.arena.died())
+		{
+			arenaFought.clear();
+			arenaNote("died", null);
+			arenaChanged();
 		}
 	}
 
@@ -472,6 +537,11 @@ public class CodexWayfinderPlugin extends Plugin
 			{
 				notes.close();
 			}
+			return;
+		}
+		if (e.getKey().startsWith("arena"))
+		{
+			clientThread.invokeLater(this::arenaChanged);
 			return;
 		}
 		if (destination != null)
@@ -597,6 +667,7 @@ public class CodexWayfinderPlugin extends Plugin
 		{
 			readAccount();
 		}
+		watchArena(now);
 
 		Place d = destination;
 		if (d != null && here != Pt.NONE)
@@ -701,12 +772,29 @@ public class CodexWayfinderPlugin extends Plugin
 			}
 			finishedQuests = done;
 			questsRead = true;
+			QuestState ma2 = Quest.MAGE_ARENA_II.getState(client);
+			boolean on = ma2 == QuestState.IN_PROGRESS;
+			if (ma2 == QuestState.FINISHED && !memory.arena.seen.isEmpty())
+			{
+				// The miniquest is done: its spots mean nothing now.
+				memory.arena = new ArenaHunt();
+				saveMemorySoon();
+			}
+			if (on != arenaOn)
+			{
+				arenaOn = on;
+				arenaDirty = true;
+			}
 		}
 		for (String q : finishedQuests)
 		{
 			b.quest(q);
 		}
 		b.questsKnown(questsRead);
+		if (arenaActive())
+		{
+			readArenaVars();
+		}
 		for (int id : a.varbitIds())
 		{
 			b.varbit(id, client.getVarbitValue(id));
@@ -1087,6 +1175,186 @@ public class CodexWayfinderPlugin extends Plugin
 		pinned = null;
 	}
 
+	// ----- Mage Arena II ---------------------------------------------------------------------
+
+	private boolean arenaActive()
+	{
+		return arenaOn && config.arenaFollowers();
+	}
+
+	/** On the client thread, every tick: Wilderness time, followers in sight, and refreshing what is shown. */
+	private void watchArena(long now)
+	{
+		if (!arenaActive())
+		{
+			if (arenaLines != null)
+			{
+				showArena();
+			}
+			return;
+		}
+		ArenaHunt hunt = memory.arena;
+		if (Pt.wildernessLevel(here) > 0)
+		{
+			hunt.wildTick();
+		}
+		Player me = client.getLocalPlayer();
+		for (NPC npc : client.getTopLevelWorldView().npcs())
+		{
+			ArenaBoss b = npc == null ? null : ArenaBoss.ofNpc(npc.getId());
+			// Each player has followers of their own, and another player's may stand in sight: only
+			// one fighting this player (it attacks as it rises) is taken to be this player's.
+			if (b == null || me == null || (npc.getInteracting() != me && me.getInteracting() != npc))
+			{
+				continue;
+			}
+			arenaFought.add(npc.getIndex());
+			WorldPoint wp = npc.getWorldLocation();
+			int tile = Pt.of(wp.getX(), wp.getY(), wp.getPlane());
+			if (hunt.saw(b, tile, now))
+			{
+				JsonObject o = new JsonObject();
+				o.addProperty("npc", npc.getId());
+				o.addProperty("at", Pt.toString(tile));
+				arenaNote("seen " + b.getTitle(), o);
+				saveMemorySoon();
+				arenaDirty = true;
+			}
+		}
+		boolean walked = arenaPlannedFrom == Pt.NONE ? here != Pt.NONE : Pt.distance(here, arenaPlannedFrom) > ARENA_REPLAN_TILES;
+		if (arenaDirty || ticks % ARENA_TICKS == 0 || (walked && ticks % REPLAN_TICKS == 0))
+		{
+			showArena();
+		}
+	}
+
+	/** Reads the hand-in varbits and the rotation timer. Both meanings are Quest Helper's, not the wiki's. */
+	private void readArenaVars()
+	{
+		for (ArenaBoss b : ArenaBoss.values())
+		{
+			if (client.getVarbitValue(b.getHandedInVarbit()) == 1)
+			{
+				arenaProof(b, ArenaHunt.Proof.HANDED);
+			}
+		}
+		int timer = client.getVarbitValue(VarbitID.MA2_TIMER_REMAINING);
+		if (arenaTimer >= 0 && timer > arenaTimer && memory.arena.rotated())
+		{
+			JsonObject o = new JsonObject();
+			o.addProperty("from", arenaTimer);
+			o.addProperty("to", timer);
+			arenaNote("rotated", o);
+			arenaChanged();
+		}
+		arenaTimer = timer;
+	}
+
+	private void arenaProof(ArenaBoss b, ArenaHunt.Proof p)
+	{
+		if (memory.arena.prove(b, p))
+		{
+			arenaNote(p.name().toLowerCase() + " " + b.getTitle(), null);
+			arenaChanged();
+		}
+	}
+
+	private void arenaChanged()
+	{
+		arenaDirty = true;
+		saveMemorySoon();
+	}
+
+	private void arenaNote(String what, JsonObject o)
+	{
+		if (notes.isOpen())
+		{
+			JsonObject n = o == null ? new JsonObject() : o;
+			n.addProperty("what", what);
+			notes.note("arena", n);
+		}
+	}
+
+	/**
+	 * On the client thread: puts the followers on the panel and the map at once, then plans the
+	 * quickest way to each one still to find on the worker and shows them again with it.
+	 */
+	private void showArena()
+	{
+		arenaDirty = false;
+		if (!arenaActive() || !loggedIn)
+		{
+			arenaGeneration.incrementAndGet();
+			arenaFought.clear();
+			arenaLines = null;
+			arenaPins.show(null);
+			push();
+			return;
+		}
+		List<ArenaHunt.Line> lines = memory.arena.lines(System.currentTimeMillis());
+		// Keep the last routes while new ones are planned, so the panel does not flicker.
+		List<ArenaHunt.Line> old = arenaLines;
+		if (old != null)
+		{
+			for (ArenaHunt.Line l : lines)
+			{
+				for (ArenaHunt.Line o : old)
+				{
+					if (o.boss == l.boss && o.tile == l.tile)
+					{
+						l.routeSeconds = o.routeSeconds;
+						l.routeVia = o.routeVia;
+						l.routeEta = o.routeEta;
+					}
+				}
+			}
+		}
+		arenaLines = lines;
+		arenaPins.show(config.arenaOnWorldMap() ? lines : null);
+		push();
+		Router r = router;
+		Atlas a = atlas;
+		int from = here;
+		if (r == null || a == null || from == Pt.NONE)
+		{
+			return;
+		}
+		arenaPlannedFrom = from;
+		Account acc = account;
+		Router.Options o = options();
+		int gen = arenaGeneration.incrementAndGet();
+		worker.execute(() ->
+		{
+			for (ArenaHunt.Line l : lines)
+			{
+				if (gen != arenaGeneration.get())
+				{
+					return;
+				}
+				if (!l.isSeen() || l.isDone())
+				{
+					continue;
+				}
+				Route found = r.route(from, l.tile, acc, o);
+				l.routeSeconds = found.isFound() ? found.getSeconds() : -1;
+				l.routeVia = ArenaWords.via(found, a.getPlaces());
+				l.routeEta = found.isFound() ? Words.eta(found, o.paces) : null;
+			}
+			if (gen != arenaGeneration.get())
+			{
+				return;
+			}
+			push();
+			clientThread.invokeLater(() ->
+			{
+				if (gen == arenaGeneration.get())
+				{
+					arenaPins.show(config.arenaOnWorldMap() ? lines : null);
+				}
+			});
+		});
+	}
+
 	// ----- Memory ----------------------------------------------------------------------------
 
 	private void loadMemory()
@@ -1107,6 +1375,8 @@ public class CodexWayfinderPlugin extends Plugin
 		memory = (m == null ? new Memory() : m).mend();
 		profileKey = configManager.getRSProfileKey();
 		accountDirty = true;
+		arenaDirty = true;
+		arenaTimer = -1;
 		rank();
 		push();
 	}
@@ -1145,7 +1415,7 @@ public class CodexWayfinderPlugin extends Plugin
 		Atlas a = atlas;
 		View v = new View(loggedIn, a != null, loggedIn ? overview : null, destination, route, bankRoute, planning, query,
 			results, memory.recentPlaces(), unlocks, memory.tripsByUse(), memory.paces, note,
-			a == null ? null : a.getPlaces(), a == null ? null : a.getItems());
+			a == null ? null : a.getPlaces(), a == null ? null : a.getItems(), arenaLines);
 		SwingUtilities.invokeLater(() -> panel.update(v));
 	}
 

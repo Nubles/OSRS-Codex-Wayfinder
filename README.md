@@ -20,6 +20,17 @@ The travel atlas of the **Codex** suite of RuneLite plugins. Type where you want
 - The route replans as you go, and a chat line says when you have arrived and how long it took; the path and pin clear themselves on arrival. Right-click the world map and choose **Wayfinder: Clear route** to drop it sooner.
 - Each of these has its own switch under *In game*, and the path has its own colour.
 
+## Mage Arena II
+While Mage Arena II is in progress, the Go tab keeps a card for each of Kolodion's three god followers, and the world map pins each one where you last saw it.
+
+![Mage Arena II](docs/arena.png)
+
+- **Where you saw it**: when Justiciar Zachariah, Derwen or Porazdir rises and fights you, Wayfinder remembers the spot for this account, with *seen here 12 min ago*.
+- **Whether the spot still holds**: the followers' spots turn over about every 45 minutes of your own Wilderness time, so Wayfinder counts the Wilderness time since and says when a spot has likely moved.
+- **Which are slain**: a follower you kill, or whose component (Justiciar's hand, ent's roots, demon's heart) is in your pack or already with Kolodion, is marked slain. Dying undoes anything not yet handed in, as it does in the game.
+- **The quickest way there**: each card names the teleports and obelisks of the quickest route from where you stand, with its time; click it to follow the route.
+- Both parts have a switch under *Mage Arena II*. Nothing here helps in the fight itself, and Wilderness safety is left to Codex Guardian.
+
 ## Atlas
 Everything you can travel with, at a glance: teleports ready in your pack, teleports in your bank, and every network (fairy rings, spirit trees, quetzals, gnome gliders, charter ships, ships, boats, canoes, balloons, carpets, minecarts, mushtrees and obelisks) with how many stops are open and what the rest need.
 
