@@ -15,10 +15,16 @@ import com.codex.wayfinder.core.Router;
 import com.codex.wayfinder.core.Shared;
 import com.codex.wayfinder.core.Step;
 import com.codex.wayfinder.core.Tracker;
+import com.codex.wayfinder.core.Trail;
 import com.codex.wayfinder.core.Words;
 import com.codex.wayfinder.notes.FieldNotes;
 import com.codex.wayfinder.overlay.BoardingMark;
+import com.codex.wayfinder.overlay.GroundTrail;
+import com.codex.wayfinder.overlay.MapTrail;
+import com.codex.wayfinder.overlay.MinimapTrail;
 import com.codex.wayfinder.overlay.StepPlaque;
+import com.codex.wayfinder.overlay.TrailPaint;
+import com.codex.wayfinder.overlay.TrailShown;
 import com.codex.wayfinder.ui.Actions;
 import com.codex.wayfinder.ui.Sigil;
 import com.codex.wayfinder.ui.Tab;
@@ -84,6 +90,9 @@ import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.ui.overlay.OverlayManager;
+import net.runelite.client.ui.overlay.worldmap.WorldMapOverlay;
+import net.runelite.client.ui.overlay.worldmap.WorldMapPoint;
+import net.runelite.client.ui.overlay.worldmap.WorldMapPointManager;
 import net.runelite.client.util.Text;
 
 /**
@@ -146,12 +155,27 @@ public class CodexWayfinderPlugin extends Plugin
 	@Inject
 	private CodexWayfinderConfig config;
 
+	@Inject
+	private WorldMapOverlay worldMapOverlay;
+
+	@Inject
+	private WorldMapPointManager worldMapPointManager;
+
 	private ExecutorService worker;
 	private FieldNotes notes;
 	private WayfinderPanel panel;
 	private NavigationButton navButton;
 	private StepPlaque plaque;
 	private BoardingMark mark;
+	private GroundTrail groundTrail;
+	private MinimapTrail minimapTrail;
+	private MapTrail mapTrail;
+	/** The route the trail was laid out from, so it is laid out once per plan. */
+	private Route trailRoute;
+	private Trail trail;
+	/** The world map pin on the place, and the place it was put on. */
+	private WorldMapPoint pin;
+	private Place pinned;
 	private final Tracker tracker = new Tracker();
 
 	private volatile Atlas atlas;
@@ -218,8 +242,14 @@ public class CodexWayfinderPlugin extends Plugin
 		clientToolbar.addNavigation(navButton);
 		plaque = new StepPlaque();
 		mark = new BoardingMark(client);
+		groundTrail = new GroundTrail(client);
+		minimapTrail = new MinimapTrail(client);
+		mapTrail = new MapTrail(client, worldMapOverlay);
 		overlayManager.add(plaque);
 		overlayManager.add(mark);
+		overlayManager.add(groundTrail);
+		overlayManager.add(minimapTrail);
+		overlayManager.add(mapTrail);
 		worker.execute(() ->
 		{
 			Atlas a = Atlas.load();
@@ -251,6 +281,12 @@ public class CodexWayfinderPlugin extends Plugin
 		clientToolbar.removeNavigation(navButton);
 		overlayManager.remove(plaque);
 		overlayManager.remove(mark);
+		overlayManager.remove(groundTrail);
+		overlayManager.remove(minimapTrail);
+		overlayManager.remove(mapTrail);
+		unpin();
+		trail = null;
+		trailRoute = null;
 		worker.shutdownNow();
 		notes.shutdown();
 		atlas = null;
@@ -368,6 +404,14 @@ public class CodexWayfinderPlugin extends Plugin
 		if (mouse == null || !bounds.contains(mouse.getX(), mouse.getY()))
 		{
 			return;
+		}
+		if (destination != null)
+		{
+			client.createMenuEntry(-1)
+				.setOption("Wayfinder")
+				.setTarget("<col=d6b26a>Clear route</col>")
+				.setType(MenuAction.RUNELITE)
+				.onClick(entry -> clearRoute());
 		}
 		int tile = mapTile(mouse, bounds);
 		if (tile == Pt.NONE)
@@ -942,40 +986,105 @@ public class CodexWayfinderPlugin extends Plugin
 		Route r = route;
 		Place d = destination;
 		Atlas a = atlas;
-		if (d == null || r == null || !r.isFound() || a == null)
+		if (d == null || r == null || !r.isFound() || a == null || r.getSteps().isEmpty())
 		{
 			plaque.show(null);
 			mark.show(Pt.NONE, config.markColour());
+			showTrail(null);
+			// Keep the pin while the first plan is made; drop it once the route is gone.
+			pin(d);
 			return;
 		}
-		Step first = r.getSteps().isEmpty() ? null : r.getSteps().get(0);
-		if (first == null)
+		if (r != trailRoute)
 		{
-			plaque.show(null);
-			mark.show(Pt.NONE, config.markColour());
-			return;
+			trailRoute = r;
+			trail = Trail.of(r);
 		}
-		String title = Words.title(first, a.getPlaces(), Words.goal(r.getSteps(), 0, d.getName()));
-		String detail = Words.detail(first, a.getItems());
+		Trail t = trail;
+		Trail.Ahead ahead = t == null ? null : t.ahead(here);
+		Step now = ahead == null ? r.getSteps().get(0) : ahead.getLeg().getStep();
+		int at = ahead == null ? 0 : ahead.getLeg().getIndex();
+		String title = Words.title(now, a.getPlaces(), Words.goal(r.getSteps(), at, d.getName()));
+		String detail = Words.detail(now, a.getItems());
 		if (config.showPlaque())
 		{
-			plaque.show(new StepPlaque.Shown("WAYFINDER: TO " + d.getName().toUpperCase(), title, detail,
-				Format.duration(r.getSeconds()), 0, 0));
+			int total = Math.max(routePlannedSeconds, r.getSeconds());
+			plaque.show(new StepPlaque.Shown("TO " + d.getName().toUpperCase(), title, detail,
+				Words.eta(r, memory.paces), total - r.getSeconds(), total));
+		}
+		else
+		{
+			plaque.show(null);
 		}
 		int board = Pt.NONE;
-		if (first.getType() == Step.Type.TRIP && first.getTransport().getOrigin() != Pt.NONE)
+		Step next = ahead == null ? null : ahead.getNext();
+		if (now.getType() == Step.Type.TRIP && now.getTransport().getOrigin() != Pt.NONE)
 		{
-			board = first.getTransport().getOrigin();
+			board = now.getTransport().getOrigin();
 		}
-		else if (first.getType() == Step.Type.WALK && r.getSteps().size() > 1)
+		else if (now.getType() == Step.Type.WALK && next != null && next.getTransport() != null
+			&& next.getTransport().getOrigin() != Pt.NONE)
 		{
-			Step next = r.getSteps().get(1);
-			if (next.getTransport() != null && next.getTransport().getOrigin() != Pt.NONE)
-			{
-				board = next.getTransport().getOrigin();
-			}
+			board = next.getTransport().getOrigin();
 		}
 		mark.show(config.markBoarding() ? board : Pt.NONE, config.markColour());
+
+		String callout = next == null ? null : Words.title(next, a.getPlaces(), null);
+		if (now.getType() == Step.Type.TRIP)
+		{
+			callout = Words.title(now, a.getPlaces(), null);
+		}
+		showTrail(t == null ? null : new TrailShown(t, ahead, here, d.getName(), callout, config.pathColour(), config.markColour(),
+			config.pathOnGround(), config.pathOnMinimap(), config.nextStopArrow(), config.pathOnWorldMap()));
+		pin(d);
+		if (pin != null)
+		{
+			pin.setTooltip("Wayfinder: " + d.getName() + ", " + Words.eta(r, memory.paces));
+		}
+	}
+
+	private void showTrail(TrailShown s)
+	{
+		groundTrail.show(s);
+		minimapTrail.show(s);
+		mapTrail.show(s);
+	}
+
+	/** Puts the Wayfinder pin on the place on the world map, or takes it off when there is none. */
+	private void pin(Place d)
+	{
+		if (d == null || !config.pathOnWorldMap())
+		{
+			unpin();
+			return;
+		}
+		if (d == pinned && pin != null)
+		{
+			return;
+		}
+		unpin();
+		int tile = d.getTile();
+		WorldPoint wp = new WorldPoint(Pt.x(tile), Pt.y(tile), Pt.plane(tile));
+		WorldMapPoint p = new WorldMapPoint(wp, TrailPaint.pin());
+		p.setImagePoint(new Point(13, 33));
+		p.setSnapToEdge(true);
+		p.setJumpOnClick(true);
+		p.setTarget(wp);
+		p.setName(d.getName());
+		p.setTooltip("Wayfinder: " + d.getName());
+		worldMapPointManager.add(p);
+		pin = p;
+		pinned = d;
+	}
+
+	private void unpin()
+	{
+		if (pin != null)
+		{
+			worldMapPointManager.remove(pin);
+		}
+		pin = null;
+		pinned = null;
 	}
 
 	// ----- Memory ----------------------------------------------------------------------------
@@ -1040,6 +1149,17 @@ public class CodexWayfinderPlugin extends Plugin
 		SwingUtilities.invokeLater(() -> panel.update(v));
 	}
 
+	/** Drops the route: from the panel's button or the world map's menu. Overlays clear on the next tick. */
+	private void clearRoute()
+	{
+		destination = null;
+		route = null;
+		bankRoute = null;
+		note = null;
+		planGeneration.incrementAndGet();
+		push();
+	}
+
 	private List<Place> find(String q)
 	{
 		Atlas a = atlas;
@@ -1096,12 +1216,7 @@ public class CodexWayfinderPlugin extends Plugin
 		@Override
 		public void clear()
 		{
-			destination = null;
-			route = null;
-			bankRoute = null;
-			note = null;
-			planGeneration.incrementAndGet();
-			push();
+			clearRoute();
 		}
 
 		@Override

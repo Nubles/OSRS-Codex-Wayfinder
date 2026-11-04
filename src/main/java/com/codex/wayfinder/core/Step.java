@@ -17,8 +17,14 @@ public final class Step
 	private final int tiles;
 	private final boolean learned;
 	private final boolean fromBank;
+	private final int[] path;
 
 	Step(Type type, int from, int to, Transport transport, int seconds, int tiles, boolean learned, boolean fromBank)
+	{
+		this(type, from, to, transport, seconds, tiles, learned, fromBank, null);
+	}
+
+	Step(Type type, int from, int to, Transport transport, int seconds, int tiles, boolean learned, boolean fromBank, int[] path)
 	{
 		this.type = type;
 		this.from = from;
@@ -28,6 +34,7 @@ public final class Step
 		this.tiles = tiles;
 		this.learned = learned;
 		this.fromBank = fromBank;
+		this.path = path != null ? path : new int[]{from, to};
 	}
 
 	public Type getType()
@@ -72,5 +79,15 @@ public final class Step
 	public boolean isFromBank()
 	{
 		return fromBank;
+	}
+
+	/**
+	 * The tiles of this step in order, from its first tile to its last: every tile walked for a
+	 * walk (a door or a stair joins two tiles that are not neighbours), or just the boarding and
+	 * landing tiles for a trip.
+	 */
+	public int[] getPath()
+	{
+		return path;
 	}
 }

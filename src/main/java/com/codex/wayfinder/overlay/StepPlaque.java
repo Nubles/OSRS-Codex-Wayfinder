@@ -71,7 +71,7 @@ public class StepPlaque extends Overlay
 
 		int icon = 18;
 		int textX = PAD + icon + 8;
-		int want = textX + Math.max(bold.stringWidth(s.title), Math.max(small.stringWidth(s.detail), small.stringWidth(s.over) + 40)) + PAD;
+		int want = textX + Math.max(bold.stringWidth(s.title), Math.max(small.stringWidth(s.detail), small.stringWidth(s.over) + small.stringWidth(s.clock) + 14)) + PAD;
 		int width = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, want));
 		int room = width - textX - PAD;
 		String[] lines = wrap(s.detail, small, room, 2);
