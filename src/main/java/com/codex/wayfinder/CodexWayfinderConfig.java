@@ -18,7 +18,10 @@ public interface CodexWayfinderConfig extends Config
 	@ConfigSection(name = "In game", description = "What Wayfinder shows while you travel", position = 1)
 	String inGame = "inGame";
 
-	@ConfigSection(name = "Field notes", description = "An optional local record for checking Wayfinder's guesses", position = 2, closedByDefault = true)
+	@ConfigSection(name = "Mage Arena II", description = "Remembering where the god followers were seen, while the miniquest is in progress", position = 2)
+	String arena = "arena";
+
+	@ConfigSection(name = "Field notes", description = "An optional local record for checking Wayfinder's guesses", position = 3, closedByDefault = true)
 	String notes = "notes";
 
 	@ConfigItem(keyName = "planWithBank", name = "Plan with your bank", position = 0, section = planning,
@@ -124,6 +127,21 @@ public interface CodexWayfinderConfig extends Config
 	@ConfigItem(keyName = "arrivalMessage", name = "Arrival message", position = 9, section = inGame,
 		description = "A line in chat when you arrive, with how long the trip took against the plan")
 	default boolean arrivalMessage()
+	{
+		return true;
+	}
+
+	@ConfigItem(keyName = "arenaFollowers", name = "Remember the followers", position = 0, section = arena,
+		description = "While Mage Arena II is in progress, remember where Justiciar Zachariah, Derwen and Porazdir were seen and which are slain, "
+			+ "and show them on the Go tab with the quickest way to each")
+	default boolean arenaFollowers()
+	{
+		return true;
+	}
+
+	@ConfigItem(keyName = "arenaOnWorldMap", name = "Followers on the world map", position = 1, section = arena,
+		description = "Pin each follower's last spot on the world map, with when it was seen there")
+	default boolean arenaOnWorldMap()
 	{
 		return true;
 	}

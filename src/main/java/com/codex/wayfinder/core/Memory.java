@@ -1,5 +1,6 @@
 package com.codex.wayfinder.core;
 
+import com.codex.wayfinder.arena.ArenaHunt;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -20,6 +21,8 @@ public final class Memory
 	public List<Spot> recent = new ArrayList<>();
 	public Map<Integer, Integer> bank = new HashMap<>();
 	public long bankTime;
+	/** The Mage Arena II hunt: where each follower was seen and which are done with. */
+	public ArenaHunt arena = new ArenaHunt();
 
 	/** A place as saved: its name, tile and kind. */
 	public static final class Spot
@@ -85,6 +88,7 @@ public final class Memory
 		{
 			bank = new HashMap<>();
 		}
+		arena = arena == null ? new ArenaHunt() : arena.mend();
 		return this;
 	}
 

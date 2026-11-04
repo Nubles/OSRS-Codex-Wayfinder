@@ -1,5 +1,7 @@
 package com.codex.wayfinder.ui;
 
+import com.codex.wayfinder.arena.ArenaHunt;
+import com.codex.wayfinder.arena.ArenaWords;
 import com.codex.wayfinder.core.Advisor;
 import com.codex.wayfinder.core.Format;
 import com.codex.wayfinder.core.Kind;
@@ -208,6 +210,11 @@ public class WayfinderPanel extends PluginPanel
 		{
 			list.add(note(view.note));
 		}
+		if (view.arena != null)
+		{
+			list.space(2);
+			arena(list);
+		}
 		if (!view.recent.isEmpty())
 		{
 			list.space(2);
@@ -218,6 +225,62 @@ public class WayfinderPanel extends PluginPanel
 			}
 		}
 		return list;
+	}
+
+	// ----- Mage Arena II ---------------------------------------------------------------------
+
+	private void arena(StackPanel list)
+	{
+		long done = view.arena.stream().filter(ArenaHunt.Line::isDone).count();
+		list.add(new SectionHeader("Mage Arena II", done + " of " + view.arena.size() + " slain"));
+		for (ArenaHunt.Line l : view.arena)
+		{
+			list.add(followerCard(l));
+		}
+	}
+
+	private JComponent followerCard(ArenaHunt.Line l)
+	{
+		boolean live = l.isSeen() && !l.isDone();
+		Color god = l.boss.getColour();
+		Card card = new Card(new BorderLayout(8, 0)).accent(l.isDone() ? Theme.alpha(Theme.GREEN, 120) : live ? god : Theme.alpha(god, 90));
+		card.setBorder(new EmptyBorder(7, 10, 7, 8));
+		JPanel left = new JPanel(new BorderLayout());
+		left.setOpaque(false);
+		left.add(new Medallion(l.boss, l.isDone(), l.moved, 24), BorderLayout.NORTH);
+		card.add(left, BorderLayout.WEST);
+		StackPanel text = new StackPanel(2, 0);
+		int w = TEXT - 34;
+		JPanel head = new JPanel(new BorderLayout(4, 0));
+		head.setOpaque(false);
+		int nameWidth = card.getFontMetrics(Theme.body()).stringWidth(l.boss.getTitle());
+		head.add(Ui.label(Ui.clip(l.boss.getTitle(), card.getFontMetrics(Theme.body()), w), Theme.body(),
+			l.isDone() ? Theme.TEXT_MUTED : Theme.TEXT), BorderLayout.CENTER);
+		// The god only when it fits beside the name; the medallion's colour says it too.
+		if (nameWidth + card.getFontMetrics(Theme.small()).stringWidth(l.boss.getGod()) + 8 <= w)
+		{
+			head.add(Ui.label(l.boss.getGod(), Theme.small(), Theme.alpha(Theme.mix(god, Theme.TEXT, 0.35), l.isDone() ? 140 : 255)), BorderLayout.EAST);
+		}
+		card.setToolTipText(l.boss.getTitle() + ", follower of " + l.boss.getGod() + ". Drops the " + l.boss.getDrop().toLowerCase());
+		text.add(head);
+		text.add(Ui.wrapped(ArenaWords.state(l), Theme.small(), l.isDone() ? Theme.GREEN : live ? Theme.GOLD : Theme.TEXT_MUTED, w));
+		String age = ArenaWords.age(l);
+		if (age != null)
+		{
+			text.add(Ui.wrapped(age, Theme.small(), l.moved ? Theme.EMBER : Theme.TEXT_FAINT, w));
+		}
+		String way = ArenaWords.way(l);
+		if (way != null)
+		{
+			text.add(Ui.wrapped(way, Theme.small(), Theme.TEAL, w));
+		}
+		card.add(text, BorderLayout.CENTER);
+		if (live)
+		{
+			card.setToolTipText("Plan the quickest way to where " + l.boss.getTitle() + " (" + l.boss.getGod() + ") was seen");
+			card.onClick(() -> actions.go(new Place(l.boss.getTitle() + " (last seen)", l.tile, Place.Group.CUSTOM)));
+		}
+		return card;
 	}
 
 	private JComponent placeRow(Place p)
