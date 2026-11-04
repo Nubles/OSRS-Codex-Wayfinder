@@ -12,9 +12,13 @@ The travel atlas of the **Codex** suite of RuneLite plugins. Type where you want
 - Right-click the world map and choose **Wayfinder: Plan a route here** to go anywhere.
 
 ## In the game
-- A **step plaque** shows the one thing to do next and the time left.
+- A **step plaque** shows the one thing to do next and the time left, and says whose time it is: *1m 40s at your pace* when every part is timed from your own trips, *~1m 40s, partly your pace* when some is, and *~1m 40s* for a plain estimate. A thin bar fills as you go.
+- **The path on the ground**: a gilt ribbon from your feet along the planned tiles to where the next ride is boarded, with the ride named above that spot (*Fairy ring CKS to Canifis*), or to the place itself, outlined in gold.
+- **The path on the minimap**: dots along the walk ahead, fainter dots for the walks after the next ride, a diamond where you board it. When that stop is past the minimap's edge, a dart on the rim points to it with the tiles left.
+- **The path on the world map**: every walk as a gold line, every ride as a dashed teal leap named by its ring code or teleport, and a Wayfinder pin on the place (it sits at the map's edge when the place is off the map; click it to jump there).
 - The tile to board (a fairy ring, a spirit tree, a ship's gangplank) is outlined.
-- The route replans as you go, and a chat line says when you have arrived and how long it took.
+- The route replans as you go, and a chat line says when you have arrived and how long it took; the path and pin clear themselves on arrival. Right-click the world map and choose **Wayfinder: Clear route** to drop it sooner.
+- Each of these has its own switch under *In game*, and the path has its own colour.
 
 ## Atlas
 Everything you can travel with, at a glance: teleports ready in your pack, teleports in your bank, and every network (fairy rings, spirit trees, quetzals, gnome gliders, charter ships, ships, boats, canoes, balloons, carpets, minecarts, mushtrees and obelisks) with how many stops are open and what the rest need.

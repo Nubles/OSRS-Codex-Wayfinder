@@ -144,4 +144,56 @@ public final class Words
 		String action = s.getTransport().getAction();
 		return action.isEmpty() ? null : action;
 	}
+
+	/**
+	 * The time a route takes, and how much of it comes from this player's own trips: "1m 40s at
+	 * your pace" when every trip is timed and the walking pace is learned, "~1m 40s, partly your
+	 * pace" when some of it is, and "~1m 40s" for a plain estimate.
+	 */
+	public static String eta(Route r, Paces paces)
+	{
+		if (r == null || !r.isFound())
+		{
+			return "";
+		}
+		int timed = 0;
+		int parts = 0;
+		boolean walkLearned = paces != null && paces.walkSamples > 0;
+		for (Step s : r.getSteps())
+		{
+			parts++;
+			if (s.getType() == Step.Type.WALK ? walkLearned : s.isLearned())
+			{
+				timed++;
+			}
+		}
+		String time = Format.duration(r.getSeconds());
+		if (parts > 0 && timed == parts)
+		{
+			return time + " at your pace";
+		}
+		return "~" + time + (timed > 0 ? ", partly your pace" : "");
+	}
+
+	/** The short call-out for a trip on the map: a fairy ring's code, a teleport's source, or the kind of ride. */
+	public static String chip(Transport t)
+	{
+		if (t == null)
+		{
+			return "";
+		}
+		switch (t.getKind())
+		{
+			case FAIRY_RING:
+				return t.getLabel().replace(" ", "");
+			case ITEM:
+			case WHISTLE:
+			case SPELL:
+			case HOME:
+			case MINIGAME:
+				return t.source();
+			default:
+				return t.getKind().getNoun();
+		}
+	}
 }

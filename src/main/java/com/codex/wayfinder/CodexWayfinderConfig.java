@@ -78,14 +78,50 @@ public interface CodexWayfinderConfig extends Config
 		return new Color(96, 184, 170, 200);
 	}
 
-	@ConfigItem(keyName = "worldMapOption", name = "World map option", position = 3, section = inGame,
-		description = "Add 'Wayfinder' to the world map's right-click menu, to plan a route to any spot")
+	@ConfigItem(keyName = "pathOnGround", name = "Path on the ground", position = 3, section = inGame,
+		description = "Draw the walk ahead on the ground, from your feet to the next ride or the place, with the ride named above where you board it")
+	default boolean pathOnGround()
+	{
+		return true;
+	}
+
+	@ConfigItem(keyName = "pathOnMinimap", name = "Path on the minimap", position = 4, section = inGame,
+		description = "Dot the route on the minimap, with a diamond where the next ride is boarded")
+	default boolean pathOnMinimap()
+	{
+		return true;
+	}
+
+	@ConfigItem(keyName = "nextStopArrow", name = "Arrow to the next stop", position = 5, section = inGame,
+		description = "When the next ride or the place is past the minimap's edge, point to it from the rim with the tiles left")
+	default boolean nextStopArrow()
+	{
+		return true;
+	}
+
+	@ConfigItem(keyName = "pathOnWorldMap", name = "Path on the world map", position = 6, section = inGame,
+		description = "Draw the whole route on the world map, each ride named, and pin the place")
+	default boolean pathOnWorldMap()
+	{
+		return true;
+	}
+
+	@Alpha
+	@ConfigItem(keyName = "pathColour", name = "Path colour", position = 7, section = inGame,
+		description = "The colour of the path on the ground, the minimap and the world map")
+	default Color pathColour()
+	{
+		return new Color(214, 178, 106, 230);
+	}
+
+	@ConfigItem(keyName = "worldMapOption", name = "World map option", position = 8, section = inGame,
+		description = "Add 'Wayfinder' to the world map's right-click menu, to plan a route to any spot or clear the one you are on")
 	default boolean worldMapOption()
 	{
 		return true;
 	}
 
-	@ConfigItem(keyName = "arrivalMessage", name = "Arrival message", position = 4, section = inGame,
+	@ConfigItem(keyName = "arrivalMessage", name = "Arrival message", position = 9, section = inGame,
 		description = "A line in chat when you arrive, with how long the trip took against the plan")
 	default boolean arrivalMessage()
 	{

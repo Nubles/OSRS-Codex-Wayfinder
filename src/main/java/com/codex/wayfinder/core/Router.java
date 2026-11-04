@@ -352,6 +352,7 @@ public final class Router
 		List<Step> steps = new ArrayList<>();
 		int tileCost = o.paces == null ? new Paces().tileCost() : o.paces.tileCost();
 		int walkFrom = tiles.get(0);
+		int walkStart = 0;
 		int walkTiles = 0;
 		int walkCost = 0;
 		for (int i = 1; i < tiles.size(); i++)
@@ -366,20 +367,33 @@ public final class Router
 			}
 			if (walkTiles > 0)
 			{
-				steps.add(new Step(Step.Type.WALK, walkFrom, tiles.get(i - 1), null, Math.round(walkCost / 100f), walkTiles, false, false));
+				steps.add(new Step(Step.Type.WALK, walkFrom, tiles.get(i - 1), null, Math.round(walkCost / 100f), walkTiles, false, false,
+					slice(tiles, walkStart, i)));
 			}
 			boolean learned = o.paces != null && o.paces.seconds(t.key()) > 0;
 			steps.add(new Step(Step.Type.TRIP, tiles.get(i - 1), tiles.get(i), t,
 				seconds(t, o.paces), 0, learned, !carried[idx]));
 			walkFrom = tiles.get(i);
+			walkStart = i;
 			walkTiles = 0;
 			walkCost = 0;
 		}
 		// A step or two off a landing is not worth its own line; the arrival check allows for it.
 		if (walkTiles > 2 || (walkTiles > 0 && steps.isEmpty()))
 		{
-			steps.add(new Step(Step.Type.WALK, walkFrom, tiles.get(tiles.size() - 1), null, Math.round(walkCost / 100f), walkTiles, false, false));
+			steps.add(new Step(Step.Type.WALK, walkFrom, tiles.get(tiles.size() - 1), null, Math.round(walkCost / 100f), walkTiles, false, false,
+				slice(tiles, walkStart, tiles.size())));
 		}
 		return new Route(start, target, steps, Math.round(s.cost(end) / 100f), true, s.expanded);
+	}
+
+	private static int[] slice(List<Integer> tiles, int from, int to)
+	{
+		int[] out = new int[to - from];
+		for (int i = from; i < to; i++)
+		{
+			out[i - from] = tiles.get(i);
+		}
+		return out;
 	}
 }
