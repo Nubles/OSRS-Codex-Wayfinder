@@ -472,7 +472,7 @@ public class CodexWayfinderPlugin extends Plugin
 		}
 		if (destination != null)
 		{
-			client.createMenuEntry(-1)
+			client.getMenu().createMenuEntry(-1)
 				.setOption("Wayfinder")
 				.setTarget("<col=d6b26a>Clear route</col>")
 				.setType(MenuAction.RUNELITE)
@@ -483,7 +483,7 @@ public class CodexWayfinderPlugin extends Plugin
 		{
 			return;
 		}
-		client.createMenuEntry(-1)
+		client.getMenu().createMenuEntry(-1)
 			.setOption("Wayfinder")
 			.setTarget("<col=d6b26a>Plan a route here</col>")
 			.setType(MenuAction.RUNELITE)
