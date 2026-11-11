@@ -176,7 +176,8 @@ public final class TrailShots
 		g.setStroke(new BasicStroke(6f));
 		g.draw(new Ellipse2D.Float(cx - radius - 3, cy - radius - 3, radius * 2 + 6, radius * 2 + 6));
 		double zoom = 4;
-		g.setClip(new Ellipse2D.Float(cx - radius + 2, cy - radius + 2, (radius - 2) * 2, (radius - 2) * 2));
+		java.awt.Shape outside = g.getClip();
+		g.clip(new Ellipse2D.Float(cx - radius + 2, cy - radius + 2, (radius - 2) * 2, (radius - 2) * 2));
 		for (Trail.Leg leg : trail.getLegs())
 		{
 			if (!leg.isWalk() || leg.getIndex() < ahead.getLeg().getIndex())
@@ -209,7 +210,7 @@ public final class TrailShots
 		}
 		else
 		{
-			g.setClip(null);
+			g.setClip(outside);
 			TrailPaint.rimArrow(g, cx, cy, radius - 3, Math.atan2(o[1], o[0]), MARK, String.valueOf(Pt.flatDistance(here, end)));
 		}
 		g.dispose();
