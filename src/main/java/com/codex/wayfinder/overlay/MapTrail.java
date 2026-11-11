@@ -47,7 +47,21 @@ public class MapTrail extends Overlay
 	}
 
 	@Override
-	public Dimension render(Graphics2D g)
+	public Dimension render(Graphics2D graphics)
+	{
+		// Drawn on a copy, so no clip, stroke, font or hint set here reaches RuneLite's renderer.
+		Graphics2D g = (Graphics2D) graphics.create();
+		try
+		{
+			return draw(g);
+		}
+		finally
+		{
+			g.dispose();
+		}
+	}
+
+	private Dimension draw(Graphics2D g)
 	{
 		TrailShown s = shown;
 		if (s == null || !s.map || s.trail == null)
@@ -60,7 +74,7 @@ public class MapTrail extends Overlay
 			return null;
 		}
 		Shape old = g.getClip();
-		g.setClip(map.getBounds());
+		g.clip(map.getBounds());
 		Theme.smooth(g);
 		Trail.Leg current = s.ahead == null ? null : s.ahead.getLeg();
 		for (Trail.Leg leg : s.trail.getLegs())

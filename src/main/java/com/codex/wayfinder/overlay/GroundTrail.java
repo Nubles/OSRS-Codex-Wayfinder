@@ -44,7 +44,21 @@ public class GroundTrail extends Overlay
 	}
 
 	@Override
-	public Dimension render(Graphics2D g)
+	public Dimension render(Graphics2D graphics)
+	{
+		// Drawn on a copy, so no clip, stroke, font or hint set here reaches RuneLite's renderer.
+		Graphics2D g = (Graphics2D) graphics.create();
+		try
+		{
+			return draw(g);
+		}
+		finally
+		{
+			g.dispose();
+		}
+	}
+
+	private Dimension draw(Graphics2D g)
 	{
 		TrailShown s = shown;
 		WorldView wv = client.getTopLevelWorldView();
